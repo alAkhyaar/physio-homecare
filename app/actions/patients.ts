@@ -13,121 +13,102 @@ import { Patient } from "@/lib/types";
 let localPatients: Patient[] = [...initialPatients];
 
 export async function getPatients(searchQuery: string = ""): Promise<Patient[]> {
-  if (!isSupabaseReachable()) {
-    if (!searchQuery.trim()) return localPatients;
-    const q = searchQuery.toLowerCase();
-    return localPatients.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.initial_diagnosis.toLowerCase().includes(q) ||
-        p.address.toLowerCase().includes(q)
-    );
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      let query = supabase
+        .from("patients")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (searchQuery.trim()) {
+        query = query.or(`name.ilike.%${searchQuery}%,initial_diagnosis.ilike.%${searchQuery}%`);
+      }
+
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        resetSupabaseError();
+        return data as Patient[];
+      }
+      if (error) {
+        console.warn("Supabase getPatients error:", error.message);
+      }
+    } catch (err) {
+      console.warn("Supabase getPatients catch:", err);
+    }
   }
 
-  try {
-    const supabase = createServerSupabaseClient();
-    let query = supabase.from("patients").select("*").order("name", { ascending: true });
-
-    if (searchQuery.trim()) {
-      query = query.or(`name.ilike.%${searchQuery}%,initial_diagnosis.ilike.%${searchQuery}%`);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      recordSupabaseError();
-      if (!searchQuery.trim()) return localPatients;
-      const q = searchQuery.toLowerCase();
-      return localPatients.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.initial_diagnosis.toLowerCase().includes(q) ||
-          p.address.toLowerCase().includes(q)
-      );
-    }
-
-    if (!data || data.length === 0) {
-      return localPatients;
-    }
-
-    resetSupabaseError();
-    return data;
-  } catch (err) {
-    recordSupabaseError();
-    if (!searchQuery.trim()) return localPatients;
-    const q = searchQuery.toLowerCase();
-    return localPatients.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.initial_diagnosis.toLowerCase().includes(q)
-    );
-  }
+  // Fallback to localPatients if Supabase is offline or empty
+  if (!searchQuery.trim()) return localPatients;
+  const q = searchQuery.toLowerCase();
+  return localPatients.filter(
+    (p) =>
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.initial_diagnosis && p.initial_diagnosis.toLowerCase().includes(q)) ||
+      (p.address && p.address.toLowerCase().includes(q))
+  );
 }
 
 export async function getPatientById(patientId: string): Promise<Patient | null> {
-  if (!isSupabaseReachable()) {
-    return localPatients.find((p) => p.id === patientId) || null;
-  }
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      const { data, error } = await supabase
+        .from("patients")
+        .select("*")
+        .eq("id", patientId)
+        .single();
 
-  try {
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
-      .from("patients")
-      .select("*")
-      .eq("id", patientId)
-      .single();
-
-    if (error || !data) {
-      return localPatients.find((p) => p.id === patientId) || null;
+      if (!error && data) {
+        resetSupabaseError();
+        return data as Patient;
+      }
+    } catch {
+      // Fallback
     }
-    resetSupabaseError();
-    return data;
-  } catch {
-    recordSupabaseError();
-    return localPatients.find((p) => p.id === patientId) || null;
   }
+
+  return localPatients.find((p) => p.id === patientId) || null;
 }
 
 export async function getPatientHistory(patientId: string) {
-  if (!isSupabaseReachable()) {
-    return sampleHistoryMap[patientId] || [
-      {
-        date: "18 Okt 2026",
-        S: "Nyeri pinggang berkurang saat duduk santai.",
-        O: "Lasègue test 60 deg, spasme erector spinae berkurang signifikan.",
-        A: "Perbaikan mobilitas dan fleksibilitas fungsional.",
-        P: "Core stability exercise, TENS 15 min, PR: Bridging 3x10 rep.",
-      },
-    ];
-  }
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      const { data, error } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("patient_id", patientId)
+        .order("scheduled_date", { ascending: false });
 
-  try {
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
-      .from("sessions")
-      .select("*")
-      .eq("patient_id", patientId)
-      .order("scheduled_date", { ascending: false });
-
-    if (error || !data || data.length === 0) {
-      return sampleHistoryMap[patientId] || [];
+      if (!error && data && data.length > 0) {
+        resetSupabaseError();
+        return data.map((s) => ({
+          date: new Date(s.scheduled_date).toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+          S: s.subjective || "Tidak ada catatan keluhan.",
+          O: s.objective || "Pemeriksaan fisik dalam batas normal.",
+          A: s.assessment || "Kondisi stabil.",
+          P: s.plan || "Terapi modalitas & latihan mandiri.",
+        }));
+      }
+    } catch {
+      // Fallback
     }
-
-    resetSupabaseError();
-    return data.map((s) => ({
-      date: new Date(s.scheduled_date).toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-      S: s.subjective || "Tidak ada catatan keluhan.",
-      O: s.objective || "Pemeriksaan fisik dalam batas normal.",
-      A: s.assessment || "Kondisi stabil.",
-      P: s.plan || "Terapi modalitas & latihan mandiri.",
-    }));
-  } catch {
-    recordSupabaseError();
-    return sampleHistoryMap[patientId] || [];
   }
+
+  return sampleHistoryMap[patientId] || [
+    {
+      date: "18 Okt 2026",
+      S: "Nyeri pinggang berkurang saat duduk santai.",
+      O: "Lasègue test 60 deg, spasme erector spinae berkurang signifikan.",
+      A: "Perbaikan mobilitas dan fleksibilitas fungsional.",
+      P: "Core stability exercise, TENS 15 min, PR: Bridging 3x10 rep.",
+    },
+  ];
 }
 
 export async function createPatient(patientData: {
@@ -152,21 +133,31 @@ export async function createPatient(patientData: {
   if (isSupabaseReachable()) {
     try {
       const supabase = createServerSupabaseClient();
-      const { error } = await supabase.from("patients").insert({
-        id: newPatient.id,
-        name: newPatient.name,
-        phone: newPatient.phone,
-        address: newPatient.address,
-        initial_diagnosis: newPatient.initial_diagnosis,
-      });
+      const { data, error } = await supabase
+        .from("patients")
+        .insert({
+          id: newPatient.id,
+          name: newPatient.name,
+          phone: newPatient.phone,
+          address: newPatient.address,
+          gender: newPatient.gender,
+          age: newPatient.age,
+          initial_diagnosis: newPatient.initial_diagnosis,
+          created_at: newPatient.created_at,
+        })
+        .select()
+        .single();
 
       if (error) {
-        recordSupabaseError();
+        console.error("Supabase insert patient error:", error.message);
       } else {
         resetSupabaseError();
+        if (data) {
+          newPatient.id = data.id;
+        }
       }
     } catch (err) {
-      recordSupabaseError();
+      console.error("Supabase insert patient exception:", err);
     }
   }
 

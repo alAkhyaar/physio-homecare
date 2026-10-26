@@ -46,6 +46,11 @@ CREATE INDEX IF NOT EXISTS idx_sessions_patient_id ON public.sessions(patient_id
 CREATE INDEX IF NOT EXISTS idx_sessions_scheduled_date ON public.sessions(scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_session_media_session_id ON public.session_media(session_id);
 
+-- Enable full read & write access for public/anon key (penting agar list pasien langsung terlihat)
+ALTER TABLE public.patients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.session_media DISABLE ROW LEVEL SECURITY;
+
 -- Sample Initial Data Seed
 INSERT INTO public.patients (id, name, phone, address, gender, age, initial_diagnosis)
 VALUES 

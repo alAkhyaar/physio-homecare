@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Search, UserPlus, ChevronRight, Activity, X, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,11 +24,19 @@ interface PatientDirectoryClientProps {
 export function PatientDirectoryClient({
   initialPatients,
 }: PatientDirectoryClientProps) {
+  const router = useRouter();
   const [patients, setPatients] = useState<Patient[]>(initialPatients);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddPatientOpen, setIsAddPatientOpen] = useState(false);
+
+  // Sync state if server revalidates
+  useEffect(() => {
+    if (initialPatients) {
+      setPatients(initialPatients);
+    }
+  }, [initialPatients]);
 
   // New patient form
   const [newPatient, setNewPatient] = useState({
@@ -43,11 +52,10 @@ export function PatientDirectoryClient({
   const filteredPatients = patients.filter((patient) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    return (
-      patient.name.toLowerCase().includes(q) ||
-      patient.initial_diagnosis.toLowerCase().includes(q) ||
-      patient.address.toLowerCase().includes(q)
-    );
+    const name = patient.name ? patient.name.toLowerCase() : "";
+    const diag = patient.initial_diagnosis ? patient.initial_diagnosis.toLowerCase() : "";
+    const addr = patient.address ? patient.address.toLowerCase() : "";
+    return name.includes(q) || diag.includes(q) || addr.includes(q);
   });
 
   const handleOpenDetail = (patient: Patient) => {
@@ -73,7 +81,10 @@ export function PatientDirectoryClient({
     });
 
     if (res.success && res.patient) {
-      setPatients((prev) => [res.patient, ...prev]);
+      setPatients((prev) => [
+        res.patient,
+        ...prev.filter((p) => p.id !== res.patient.id),
+      ]);
       setIsAddPatientOpen(false);
       setNewPatient({
         name: "",
@@ -83,6 +94,7 @@ export function PatientDirectoryClient({
         age: 50,
         initial_diagnosis: "",
       });
+      router.refresh();
     }
     setIsSaving(false);
   };
