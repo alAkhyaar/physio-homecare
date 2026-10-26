@@ -51,12 +51,12 @@ export function createServerSupabaseClient() {
       },
     },
     global: {
-      fetch: (url, options = {}) => {
+      fetch: (url: RequestInfo | URL, options: RequestInit = {}) => {
         // Enforce a strict 1500ms timeout so DNS or network delays never freeze the UI
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1500);
 
-        if (options.signal) {
+        if (options?.signal) {
           options.signal.addEventListener("abort", () => controller.abort());
         }
 
