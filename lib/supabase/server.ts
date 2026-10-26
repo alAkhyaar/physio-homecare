@@ -1,6 +1,29 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+let lastErrorTimestamp = 0;
+const COOLDOWN_PERIOD_MS = 60 * 1000; // 60 seconds cooldown if Supabase is offline/unreachable
+
+export function isSupabaseReachable(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url || url.includes("dummy-project") || url.includes("xxxxxx")) {
+    return false;
+  }
+  // If recent DNS or network failure occurred, wait for cooldown before retrying
+  if (Date.now() - lastErrorTimestamp < COOLDOWN_PERIOD_MS) {
+    return false;
+  }
+  return true;
+}
+
+export function recordSupabaseError() {
+  lastErrorTimestamp = Date.now();
+}
+
+export function resetSupabaseError() {
+  lastErrorTimestamp = 0;
+}
+
 export function createServerSupabaseClient() {
   const cookieStore = cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co";
@@ -23,8 +46,26 @@ export function createServerSupabaseClient() {
             cookieStore.set(name, value, options as any)
           );
         } catch {
-          // Can be ignored if called from Server Component
+          // Ignored if called from Server Component
         }
+      },
+    },
+    global: {
+      fetch: (url, options = {}) => {
+        // Enforce a strict 1500ms timeout so DNS or network delays never freeze the UI
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+        if (options.signal) {
+          options.signal.addEventListener("abort", () => controller.abort());
+        }
+
+        return fetch(url, {
+          ...options,
+          signal: controller.signal,
+        }).finally(() => {
+          clearTimeout(timeoutId);
+        });
       },
     },
   });

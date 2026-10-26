@@ -1,13 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  isSupabaseReachable,
+  recordSupabaseError,
+  resetSupabaseError,
+} from "@/lib/supabase/server";
 import { initialPatients, sampleHistoryMap } from "@/lib/mock-data";
 import { Patient } from "@/lib/types";
 
 let localPatients: Patient[] = [...initialPatients];
 
 export async function getPatients(searchQuery: string = ""): Promise<Patient[]> {
+  if (!isSupabaseReachable()) {
+    if (!searchQuery.trim()) return localPatients;
+    const q = searchQuery.toLowerCase();
+    return localPatients.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.initial_diagnosis.toLowerCase().includes(q) ||
+        p.address.toLowerCase().includes(q)
+    );
+  }
+
   try {
     const supabase = createServerSupabaseClient();
     let query = supabase.from("patients").select("*").order("name", { ascending: true });
@@ -17,7 +33,8 @@ export async function getPatients(searchQuery: string = ""): Promise<Patient[]> 
     }
 
     const { data, error } = await query;
-    if (error || !data || data.length === 0) {
+    if (error) {
+      recordSupabaseError();
       if (!searchQuery.trim()) return localPatients;
       const q = searchQuery.toLowerCase();
       return localPatients.filter(
@@ -27,8 +44,15 @@ export async function getPatients(searchQuery: string = ""): Promise<Patient[]> 
           p.address.toLowerCase().includes(q)
       );
     }
+
+    if (!data || data.length === 0) {
+      return localPatients;
+    }
+
+    resetSupabaseError();
     return data;
   } catch (err) {
+    recordSupabaseError();
     if (!searchQuery.trim()) return localPatients;
     const q = searchQuery.toLowerCase();
     return localPatients.filter(
@@ -40,6 +64,10 @@ export async function getPatients(searchQuery: string = ""): Promise<Patient[]> 
 }
 
 export async function getPatientById(patientId: string): Promise<Patient | null> {
+  if (!isSupabaseReachable()) {
+    return localPatients.find((p) => p.id === patientId) || null;
+  }
+
   try {
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
@@ -51,13 +79,27 @@ export async function getPatientById(patientId: string): Promise<Patient | null>
     if (error || !data) {
       return localPatients.find((p) => p.id === patientId) || null;
     }
+    resetSupabaseError();
     return data;
   } catch {
+    recordSupabaseError();
     return localPatients.find((p) => p.id === patientId) || null;
   }
 }
 
 export async function getPatientHistory(patientId: string) {
+  if (!isSupabaseReachable()) {
+    return sampleHistoryMap[patientId] || [
+      {
+        date: "18 Okt 2026",
+        S: "Nyeri pinggang berkurang saat duduk santai.",
+        O: "Lasègue test 60 deg, spasme erector spinae berkurang signifikan.",
+        A: "Perbaikan mobilitas dan fleksibilitas fungsional.",
+        P: "Core stability exercise, TENS 15 min, PR: Bridging 3x10 rep.",
+      },
+    ];
+  }
+
   try {
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
@@ -67,17 +109,10 @@ export async function getPatientHistory(patientId: string) {
       .order("scheduled_date", { ascending: false });
 
     if (error || !data || data.length === 0) {
-      return sampleHistoryMap[patientId] || [
-        {
-          date: "18 Okt 2026",
-          S: "Nyeri pinggang berkurang saat duduk santai.",
-          O: "Lasègue test 60 deg, spasme erector spinae berkurang signifikan.",
-          A: "Perbaikan mobilitas dan fleksibilitas fungsional.",
-          P: "Core stability exercise, TENS 15 min, PR: Bridging 3x10 rep.",
-        },
-      ];
+      return sampleHistoryMap[patientId] || [];
     }
 
+    resetSupabaseError();
     return data.map((s) => ({
       date: new Date(s.scheduled_date).toLocaleDateString("id-ID", {
         day: "numeric",
@@ -90,6 +125,7 @@ export async function getPatientHistory(patientId: string) {
       P: s.plan || "Terapi modalitas & latihan mandiri.",
     }));
   } catch {
+    recordSupabaseError();
     return sampleHistoryMap[patientId] || [];
   }
 }
@@ -113,21 +149,25 @@ export async function createPatient(patientData: {
     created_at: new Date().toISOString(),
   };
 
-  try {
-    const supabase = createServerSupabaseClient();
-    const { error } = await supabase.from("patients").insert({
-      id: newPatient.id,
-      name: newPatient.name,
-      phone: newPatient.phone,
-      address: newPatient.address,
-      initial_diagnosis: newPatient.initial_diagnosis,
-    });
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      const { error } = await supabase.from("patients").insert({
+        id: newPatient.id,
+        name: newPatient.name,
+        phone: newPatient.phone,
+        address: newPatient.address,
+        initial_diagnosis: newPatient.initial_diagnosis,
+      });
 
-    if (error) {
-      console.warn("Supabase insert error, saving locally:", error.message);
+      if (error) {
+        recordSupabaseError();
+      } else {
+        resetSupabaseError();
+      }
+    } catch (err) {
+      recordSupabaseError();
     }
-  } catch (err) {
-    console.warn("Using fallback local patient insertion");
   }
 
   localPatients = [newPatient, ...localPatients];

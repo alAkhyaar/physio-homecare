@@ -1,18 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  isSupabaseReachable,
+  recordSupabaseError,
+  resetSupabaseError,
+} from "@/lib/supabase/server";
 import { initialSessions, initialPatients } from "@/lib/mock-data";
 import { Session, SessionStatus, PaymentStatus } from "@/lib/types";
 
-// Fallback in-memory store for demo when Supabase isn't connected yet
+// In-memory store for fallback or local demo
 let localSessions: Session[] = [...initialSessions];
 
 export async function getSessionsForToday(): Promise<Session[]> {
+  if (!isSupabaseReachable()) {
+    return localSessions;
+  }
+
   try {
     const supabase = createServerSupabaseClient();
-    const today = new Date().toISOString().split("T")[0];
-
     const { data, error } = await supabase
       .from("sessions")
       .select(`
@@ -21,16 +28,22 @@ export async function getSessionsForToday(): Promise<Session[]> {
       `)
       .order("scheduled_date", { ascending: true });
 
-    if (error || !data || data.length === 0) {
+    if (error) {
+      recordSupabaseError();
       return localSessions;
     }
 
+    if (!data || data.length === 0) {
+      return localSessions;
+    }
+
+    resetSupabaseError();
     return data.map((item) => ({
       ...item,
       patient: item.patient,
     }));
   } catch (err) {
-    console.warn("Supabase query fallback to local sessions:", err);
+    recordSupabaseError();
     return localSessions;
   }
 }
@@ -44,23 +57,27 @@ export async function updateSessionSoap(
     plan: string;
   }
 ) {
-  try {
-    const supabase = createServerSupabaseClient();
-    const { error } = await supabase
-      .from("sessions")
-      .update({
-        subjective: soapData.subjective,
-        objective: soapData.objective,
-        assessment: soapData.assessment,
-        plan: soapData.plan,
-      })
-      .eq("id", sessionId);
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      const { error } = await supabase
+        .from("sessions")
+        .update({
+          subjective: soapData.subjective,
+          objective: soapData.objective,
+          assessment: soapData.assessment,
+          plan: soapData.plan,
+        })
+        .eq("id", sessionId);
 
-    if (error) {
-      console.warn("Supabase update error, applying to local store:", error.message);
+      if (error) {
+        recordSupabaseError();
+      } else {
+        resetSupabaseError();
+      }
+    } catch (err) {
+      recordSupabaseError();
     }
-  } catch (err) {
-    console.warn("Using fallback local session update");
   }
 
   // Update in local memory
@@ -89,23 +106,27 @@ export async function updateSessionBillingAndComplete(
     payment_status: PaymentStatus;
   }
 ) {
-  try {
-    const supabase = createServerSupabaseClient();
-    const { error } = await supabase
-      .from("sessions")
-      .update({
-        bill_amount: billing.bill_amount,
-        transport_amount: billing.transport_amount,
-        status: billing.status,
-        payment_status: billing.payment_status,
-      })
-      .eq("id", sessionId);
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      const { error } = await supabase
+        .from("sessions")
+        .update({
+          bill_amount: billing.bill_amount,
+          transport_amount: billing.transport_amount,
+          status: billing.status,
+          payment_status: billing.payment_status,
+        })
+        .eq("id", sessionId);
 
-    if (error) {
-      console.warn("Supabase billing update error:", error.message);
+      if (error) {
+        recordSupabaseError();
+      } else {
+        resetSupabaseError();
+      }
+    } catch (err) {
+      recordSupabaseError();
     }
-  } catch (err) {
-    console.warn("Using fallback local billing update");
   }
 
   localSessions = localSessions.map((s) =>
