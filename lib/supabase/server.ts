@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 let lastErrorTimestamp = 0;
-const COOLDOWN_PERIOD_MS = 60 * 1000; // 60 seconds cooldown if Supabase is offline/unreachable
+const COOLDOWN_PERIOD_MS = 5 * 1000; // 5 seconds cooldown if offline
 
 export function isSupabaseReachable(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
