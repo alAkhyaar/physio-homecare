@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fisioterapi Homecare - Rekam Medis & Invoice</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Custom scrollbar and animations */
+    body { font-family: 'Inter', sans-serif; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    [x-cloak] { display: none !important; }
+
+    /* Custom Animations */
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .animate-slide-up {
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="h-full text-slate-800 antialiased flex flex-col items-center justify-center p-0 md:p-4">
+
+  <!-- Mobile Wrapper Container (Simulates Phone Screen on Desktop) -->
+  <div x-data="appData()" x-init="initApp()" class="w-full max-w-md h-full md:h-[844px] bg-slate-50 md:rounded-[36px] md:shadow-2xl md:border-[8px] md:border-slate-800 overflow-hidden flex flex-col relative border-box">
+
+    <!-- TOP HEADER -->
+    <header class="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shrink-0">
+      <div class="flex items-center space-x-2">
+        <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold shadow-sm shadow-brand-200">
+          <i data-lucide="activity" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-slate-900 leading-tight">FisioCare Mobile</h1>
+          <p class="text-xs text-slate-500 font-medium" x-text="currentDateStr"></p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button @click="showToast('Notifikasi diperbarui')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN CONTENT AREA (Scrollable) -->
+    <main class="flex-1 overflow-y-auto no-scrollbar pb-20">
+
+      <!-- ================= TAB 1: DASHBOARD ================= -->
+      <div x-show="activeTab === 'dashboard'" x-cloak class="p-4 space-y-4">
+        
+        <!-- Quick Stats Banner -->
+        <div class="bg-gradient-to-br from-brand-700 to-brand-900 rounded-2xl p-4 text-white shadow-lg shadow-brand-900/10">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <p class="text-xs font-medium text-brand-100">Jadwal Visit Hari Ini</p>
+              <h2 class="text-2xl font-bold mt-0.5" x-text="visits.length + ' Pasien'"></h2>
+            </div>
+            <span class="bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-semibold text-white">
+              Target: 100%
+            </span>
+          </div>
+          <div class="grid grid-cols-3 gap-2 pt-2 border-t border-brand-600/50 text-center">
+            <div class="bg-white/10 rounded-xl p-1.5">
+              <p class="text-[10px] text-brand-200">Akan Datang</p>
+              <p class="text-sm font-bold" x-text="visits.filter(v => v.status === 'Jadwal').length"></p>
+            </div>
+            <div class="bg-white/10 rounded-xl p-1.5">
+              <p class="text-[10px] text-brand-200">Selesai</p>
+              <p class="text-sm font-bold" x-text="visits.filter(v => v.status === 'Selesai').length"></p>
+            </div>
+            <div class="bg-white/10 rounded-xl p-1.5">
+              <p class="text-[10px] text-brand-200">Belum Lunas</p>
+              <p class="text-sm font-bold text-amber-300" x-text="visits.filter(v => v.status === 'Belum Lunas').length"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section Title & Filter -->
+        <div class="flex justify-between items-center pt-1">
+          <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+            <i data-lucide="calendar" class="w-4 h-4 text-brand-600"></i>
+            Daftar Kunjungan Hari Ini
+          </h3>
+          <span class="text-xs text-brand-700 font-semibold cursor-pointer hover:underline">Lihat Semua</span>
+        </div>
+
+        <!-- Visit Cards List -->
+        <div class="space-y-3">
+          <template x-for="visit in visits" :key="visit.id">
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition">
+              
+              <!-- Card Header -->
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h4 class="font-bold text-slate-900 text-base" x-text="visit.name"></h4>
+                    <span class="text-xs font-medium text-slate-500" x-text="'(' + visit.age + ' th)'"></span>
+                  </div>
+                  <p class="text-xs text-brand-700 font-medium mt-0.5" x-text="visit.diagnosis"></p>
+                </div>
+                
+                <!-- Status Badge -->
+                <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1"
+                      :class="{
+                        'bg-amber-100 text-amber-800 border border-amber-200': visit.status === 'Jadwal',
+                        'bg-emerald-100 text-emerald-800 border border-emerald-200': visit.status === 'Selesai',
+                        'bg-rose-100 text-rose-800 border border-rose-200': visit.status === 'Belum Lunas'
+                      }">
+                  <span class="w-1.5 h-1.5 rounded-full"
+                        :class="{
+                          'bg-amber-500': visit.status === 'Jadwal',
+                          'bg-emerald-500': visit.status === 'Selesai',
+                          'bg-rose-500': visit.status === 'Belum Lunas'
+                        }"></span>
+                  <span x-text="visit.status"></span>
+                </span>
+              </div>
+
+              <!-- Location & Time -->
+              <div class="space-y-1 my-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs text-slate-600">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                  <span class="font-medium text-slate-800" x-text="visit.time"></span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5"></i>
+                  <span class="line-clamp-1" x-text="visit.address"></span>
+                </div>
+              </div>
+
+              <!-- Quick Action Buttons -->
+              <div class="flex items-center gap-2 pt-1 border-t border-slate-100">
+                <!-- WhatsApp Quick Link -->
+                <a :href="'https://wa.me/' + visit.phone" target="_blank" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                  <span>WA</span>
+                </a>
+
+                <!-- Google Maps Link -->
+                <a :href="'https://maps.google.com/?q=' + encodeURIComponent(visit.address)" target="_blank" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+                  <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+                  <span>Peta</span>
+                </a>
+
+                <!-- Start Session / SOAP Button -->
+                <button @click="openSoapModal(visit)" class="flex-[2] bg-brand-600 hover:bg-brand-700 text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm shadow-brand-600/30 transition">
+                  <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                  <span x-text="visit.status === 'Selesai' ? 'Lihat SOAP' : 'Mulai Sesi'"></span>
+                </button>
+              </div>
+
+            </div>
+          </template>
+        </div>
+
+      </div>
+
+      <!-- ================= TAB 2: DIREKTORI PASIEN ================= -->
+      <div x-show="activeTab === 'patients'" x-cloak class="p-4 space-y-4">
+        
+        <!-- Search Bar -->
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3.5 text-slate-400"></i>
+          <input type="text" x-model="searchQuery" placeholder="Cari nama pasien atau diagnosa..." 
+                 class="w-full bg-white border border-slate-200 pl-9 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition">
+        </div>
+
+        <!-- Add Patient Button -->
+        <button @click="showToast('Fitur Tambah Pasien Baru')" class="w-full bg-white border-2 border-dashed border-slate-300 hover:border-brand-500 hover:text-brand-600 text-slate-600 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition">
+          <i data-lucide="user-plus" class="w-4 h-4"></i>
+          <span>Tambah Pasien Baru</span>
+        </button>
+
+        <!-- Patient Directory List -->
+        <div class="space-y-3">
+          <template x-for="patient in filteredPatients" :key="patient.id">
+            <div @click="openPatientDetail(patient)" class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-brand-300 cursor-pointer transition">
+              <div class="flex justify-between items-start">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-brand-50 text-brand-700 font-bold text-sm flex items-center justify-center border border-brand-100">
+                    <span x-text="getInitials(patient.name)"></span>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-slate-900 text-sm" x-text="patient.name"></h4>
+                    <p class="text-xs text-slate-500" x-text="patient.gender + ', ' + patient.age + ' tahun'"></p>
+                  </div>
+                </div>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 mt-1"></i>
+              </div>
+
+              <div class="mt-3 pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
+                <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium" x-text="patient.baselineDiagnosis"></span>
+                <span class="text-slate-400 font-medium" x-text="patient.totalSessions + ' Sesi Selesai'"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+      </div>
+
+      <!-- ================= TAB 3: PROFIL TERAPIS ================= -->
+      <div x-show="activeTab === 'profile'" x-cloak class="p-4 space-y-4">
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 text-center shadow-sm">
+          <div class="w-20 h-20 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center mx-auto mb-3 font-bold text-2xl border-2 border-brand-300">
+            FT
+          </div>
+          <h3 class="font-bold text-slate-900 text-base">Ftr. Sarah Amalia, S.Ft</h3>
+          <p class="text-xs text-slate-500 font-medium mt-0.5">STR: 19882023091122</p>
+          <span class="inline-block bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2.5 py-0.5 rounded-full mt-2">
+            Fisioterapis Homecare Aktif
+          </span>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 shadow-sm text-xs font-medium text-slate-700">
+          <div @click="showToast('Pengaturan Profil')" class="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <i data-lucide="user" class="w-4 h-4 text-slate-400"></i>
+              <span>Edit Data Diri & STR</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+          </div>
+          <div @click="showToast('Template Quick-Chips')" class="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <i data-lucide="sliders" class="w-4 h-4 text-slate-400"></i>
+              <span>Atur Template Teks SOAP</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+          </div>
+          <div @click="showToast('Laporan Keuangan')" class="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4 text-slate-400"></i>
+              <span>Rekap Pendapatan & Invoice</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- BOTTOM NAVIGATION BAR -->
+    <nav class="bg-white border-t border-slate-200 px-6 py-2 flex justify-between items-center absolute bottom-0 left-0 right-0 z-10 shrink-0">
+      <button @click="switchTab('dashboard')" class="flex flex-col items-center gap-1 transition"
+              :class="activeTab === 'dashboard' ? 'text-brand-600 font-bold' : 'text-slate-400 font-medium hover:text-slate-600'">
+        <i data-lucide="calendar" class="w-5 h-5"></i>
+        <span class="text-[10px]">Jadwal</span>
+      </button>
+
+      <button @click="switchTab('patients')" class="flex flex-col items-center gap-1 transition"
+              :class="activeTab === 'patients' ? 'text-brand-600 font-bold' : 'text-slate-400 font-medium hover:text-slate-600'">
+        <i data-lucide="users" class="w-5 h-5"></i>
+        <span class="text-[10px]">Pasien</span>
+      </button>
+
+      <button @click="switchTab('profile')" class="flex flex-col items-center gap-1 transition"
+              :class="activeTab === 'profile' ? 'text-brand-600 font-bold' : 'text-slate-400 font-medium hover:text-slate-600'">
+        <i data-lucide="user" class="w-5 h-5"></i>
+        <span class="text-[10px]">Profil</span>
+      </button>
+    </nav>
+
+
+    <!-- ================= MODAL 1: INTERACTIVE SOAP FORM ================= -->
+    <div x-show="isSoapOpen" x-cloak class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-30 flex flex-col justify-end transition-opacity">
+      
+      <div @click.away="closeSoapModal()" class="bg-white rounded-t-3xl h-[90%] flex flex-col animate-slide-up overflow-hidden shadow-2xl">
+        
+        <!-- Header Sheet -->
+        <div class="px-5 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+          <div>
+            <span class="text-[10px] font-bold text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full uppercase">Form Rekam Medis (SOAP)</span>
+            <h3 class="font-bold text-slate-900 text-sm mt-0.5" x-text="activeVisit ? activeVisit.name : ''"></h3>
+          </div>
+          <button @click="closeSoapModal()" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- SOAP Tabs Navigation -->
+        <div class="flex border-b border-slate-200 bg-white shrink-0 text-xs font-bold text-center">
+          <template x-for="tab in ['S', 'O', 'A', 'P']" :key="tab">
+            <button @click="activeSoapTab = tab" class="flex-1 py-2.5 border-b-2 transition"
+                    :class="activeSoapTab === tab ? 'border-brand-600 text-brand-600 bg-brand-50/50' : 'border-transparent text-slate-400 hover:text-slate-600'">
+              <span x-text="tab === 'S' ? 'Subjective (S)' : tab === 'O' ? 'Objective (O)' : tab === 'A' ? 'Assessment (A)' : 'Plan (P)'"></span>
+            </button>
+          </template>
+        </div>
+
+        <!-- SOAP Content Area -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
+          
+          <!-- TAB S (Subjective) -->
+          <div x-show="activeSoapTab === 'S'" class="space-y-3">
+            <label class="block text-xs font-semibold text-slate-700">Keluhan Utama Pasien Hari Ini:</label>
+            <textarea x-model="soapData.S" rows="4" placeholder="Tulis keluhan pasien (misal: nyeri pinggang berkurang, kaku saat pagi)..."
+                      class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition"></textarea>
+
+            <!-- Quick Chips -->
+            <div>
+              <p class="text-[11px] font-medium text-slate-500 mb-1.5">Template Cepat (Ketuk untuk menambah):</p>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="chip in quickChips.S" :key="chip">
+                  <button @click="appendChip('S', chip)" class="bg-slate-100 hover:bg-brand-100 hover:text-brand-800 text-slate-700 text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 transition">
+                    + <span x-text="chip"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB O (Objective) -->
+          <div x-show="activeSoapTab === 'O'" class="space-y-3">
+            <label class="block text-xs font-semibold text-slate-700">Pemeriksaan Fisik & Vital Sign:</label>
+            <textarea x-model="soapData.O" rows="4" placeholder="Hasil pemeriksaan fisik (misal: TD 120/80, ROM bahu terbatas 100 deg)..."
+                      class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition"></textarea>
+
+            <div>
+              <p class="text-[11px] font-medium text-slate-500 mb-1.5">Template Cepat:</p>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="chip in quickChips.O" :key="chip">
+                  <button @click="appendChip('O', chip)" class="bg-slate-100 hover:bg-brand-100 hover:text-brand-800 text-slate-700 text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 transition">
+                    + <span x-text="chip"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Dokumentasi Foto/Video -->
+            <div class="pt-2 border-t border-slate-100">
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Dokumentasi Visual (Foto/Video Postur/ROM):</label>
+              <div class="flex items-center gap-2">
+                <button @click="simulatePhotoUpload()" class="bg-slate-100 border border-dashed border-slate-300 hover:border-brand-500 text-slate-600 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition">
+                  <i data-lucide="camera" class="w-4 h-4 text-brand-600"></i>
+                  <span>Ambil Foto</span>
+                </button>
+                <template x-if="soapData.photoAttached">
+                  <div class="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2.5 py-1.5 rounded-xl border border-emerald-200 text-xs font-medium">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                    <span>1 Foto Terlampir</span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB A (Assessment) -->
+          <div x-show="activeSoapTab === 'A'" class="space-y-3">
+            <label class="block text-xs font-semibold text-slate-700">Analisa / Diagnosa Fisioterapi:</label>
+            <textarea x-model="soapData.A" rows="4" placeholder="Analisa klinis perkembangan kondisi pasien..."
+                      class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition"></textarea>
+
+            <div>
+              <p class="text-[11px] font-medium text-slate-500 mb-1.5">Template Cepat:</p>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="chip in quickChips.A" :key="chip">
+                  <button @click="appendChip('A', chip)" class="bg-slate-100 hover:bg-brand-100 hover:text-brand-800 text-slate-700 text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 transition">
+                    + <span x-text="chip"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB P (Plan) -->
+          <div x-show="activeSoapTab === 'P'" class="space-y-3">
+            <label class="block text-xs font-semibold text-slate-700">Rencana Intervensi & PR Latihan Pasien:</label>
+            <textarea x-model="soapData.P" rows="4" placeholder="Tindakan yang dilakukan hari ini & latihan mandiri..."
+                      class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition"></textarea>
+
+            <div>
+              <p class="text-[11px] font-medium text-slate-500 mb-1.5">Template Cepat:</p>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="chip in quickChips.P" :key="chip">
+                  <button @click="appendChip('P', chip)" class="bg-slate-100 hover:bg-brand-100 hover:text-brand-800 text-slate-700 text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 transition">
+                    + <span x-text="chip"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer Action -->
+        <div class="p-4 border-t border-slate-200 bg-white shrink-0">
+          <button @click="submitSoapToInvoice()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand-600/30 transition">
+            <span>Selesaikan SOAP & Buat Invoice</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ================= MODAL 2: INVOICE GENERATION BOTTOM SHEET ================= -->
+    <div x-show="isInvoiceOpen" x-cloak class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-40 flex flex-col justify-end transition-opacity">
+      
+      <div @click.away="isInvoiceOpen = false" class="bg-white rounded-t-3xl max-h-[90%] flex flex-col animate-slide-up overflow-hidden shadow-2xl">
+        
+        <!-- Sheet Header -->
+        <div class="px-5 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <i data-lucide="receipt" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-slate-900 text-sm">Bukti Tagihan / Invoice</h3>
+              <p class="text-[10px] text-slate-500" x-text="activeVisit ? activeVisit.name : ''"></p>
+            </div>
+          </div>
+          <button @click="isInvoiceOpen = false" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Sheet Body -->
+        <div class="p-5 space-y-4 overflow-y-auto no-scrollbar text-xs">
+          
+          <!-- Rincian Biaya Input -->
+          <div class="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+            <div>
+              <label class="block text-slate-600 font-semibold mb-1">Biaya Tindakan Fisioterapi (Rp):</label>
+              <input type="number" x-model.number="invoiceData.priceAction" 
+                     class="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-brand-500">
+            </div>
+
+            <div>
+              <label class="block text-slate-600 font-semibold mb-1">Biaya Transportasi / Visit (Rp):</label>
+              <input type="number" x-model.number="invoiceData.priceTransport" 
+                     class="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-brand-500">
+            </div>
+
+            <div class="pt-2 border-t border-slate-200 flex justify-between items-center font-bold text-sm text-slate-900">
+              <span>Total Tagihan:</span>
+              <span class="text-brand-700 font-extrabold text-base" x-text="formatRupiah(totalInvoiceCalculated)"></span>
+            </div>
+          </div>
+
+          <!-- Preview WhatsApp Message -->
+          <div>
+            <label class="block text-slate-700 font-semibold mb-1 flex justify-between">
+              <span>Preview Pesan WhatsApp:</span>
+              <span class="text-[10px] text-brand-600 font-normal">Otomatis Terformat</span>
+            </label>
+            <div class="bg-emerald-50/60 border border-emerald-200/80 p-3 rounded-xl text-[11px] text-slate-700 font-mono whitespace-pre-line leading-relaxed" x-text="generateWaTextPreview()">
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Sheet Footer -->
+        <div class="p-4 border-t border-slate-200 bg-white shrink-0 flex gap-2">
+          <button @click="completeAndSendInvoice('Selesai')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition">
+            <i data-lucide="message-circle" class="w-4 h-4"></i>
+            <span>Simpan & Kirim WA</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ================= MODAL 3: PATIENT HISTORY TIMELINE ================= -->
+    <div x-show="isPatientDetailOpen" x-cloak class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-30 flex flex-col justify-end transition-opacity">
+      
+      <div @click.away="isPatientDetailOpen = false" class="bg-white rounded-t-3xl h-[92%] flex flex-col animate-slide-up overflow-hidden shadow-2xl">
+        
+        <!-- Header -->
+        <div class="px-5 py-3.5 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+          <div>
+            <h3 class="font-bold text-slate-900 text-base" x-text="selectedPatient ? selectedPatient.name : ''"></h3>
+            <p class="text-xs text-slate-500" x-text="selectedPatient ? selectedPatient.gender + ', ' + selectedPatient.age + ' Tahun' : ''"></p>
+          </div>
+          <button @click="isPatientDetailOpen = false" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Body Scrollable -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+          
+          <!-- Baseline Diagnosis Card -->
+          <div class="bg-brand-50 border border-brand-200 rounded-2xl p-3.5 text-xs text-brand-900 space-y-1">
+            <div class="font-bold flex items-center gap-1.5 text-brand-800">
+              <i data-lucide="activity" class="w-4 h-4"></i>
+              <span>Diagnosa Awal (Baseline)</span>
+            </div>
+            <p class="font-medium" x-text="selectedPatient ? selectedPatient.baselineDiagnosis : ''"></p>
+            <p class="text-[10px] text-brand-700" x-text="'Alamat: ' + (selectedPatient ? selectedPatient.address : '')"></p>
+          </div>
+
+          <!-- Timeline Sessions Title -->
+          <h4 class="font-bold text-xs text-slate-900 flex items-center gap-1.5 pt-1">
+            <i data-lucide="history" class="w-4 h-4 text-brand-600"></i>
+            <span>Riwayat Sesi Fisioterapi</span>
+          </h4>
+
+          <!-- Timeline Feed -->
+          <div class="space-y-3 relative pl-3 border-l-2 border-slate-200 ml-2">
+            <template x-for="(session, index) in patientHistorySample" :key="index">
+              <div class="relative">
+                <!-- Dot Marker -->
+                <div class="w-3 h-3 rounded-full bg-brand-600 border-2 border-white absolute -left-[19px] top-1"></div>
+                
+                <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-1.5 text-xs">
+                  <div class="flex justify-between items-center border-b border-slate-100 pb-1">
+                    <span class="font-bold text-slate-900" x-text="'Sesi Ke-' + (patientHistorySample.length - index)"></span>
+                    <span class="text-[10px] text-slate-400 font-medium" x-text="session.date"></span>
+                  </div>
+                  
+                  <div class="space-y-1 text-slate-700">
+                    <p><strong class="text-brand-700">S:</strong> <span x-text="session.S"></span></p>
+                    <p><strong class="text-brand-700">O:</strong> <span x-text="session.O"></span></p>
+                    <p><strong class="text-brand-700">A:</strong> <span x-text="session.A"></span></p>
+                    <p><strong class="text-brand-700">P:</strong> <span x-text="session.P"></span></p>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- TOAST NOTIFICATION -->
+    <div x-show="toast.show" x-cloak 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 transform translate-y-4"
+         x-transition:enter-end="opacity-100 transform translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 transform translate-y-0"
+         x-transition:leave-end="opacity-0 transform translate-y-4"
+         class="absolute top-16 left-4 right-4 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl flex items-center justify-between z-50">
+      <span x-text="toast.message"></span>
+      <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+    </div>
+
+  </div>
+
+  <!-- Alpine.js Application Logic -->
+  <script>
+    function appData() {
+      return {
+        activeTab: 'dashboard',
+        currentDateStr: '',
+        searchQuery: '',
+        
+        // Modals state
+        isSoapOpen: false,
+        isInvoiceOpen: false,
+        isPatientDetailOpen: false,
+        
+        activeVisit: null,
+        selectedPatient: null,
+        activeSoapTab: 'S',
+
+        // SOAP Form Input State
+        soapData: {
+          S: '',
+          O: '',
+          A: '',
+          P: '',
+          photoAttached: false
+        },
+
+        // Invoice Input State
+        invoiceData: {
+          priceAction: 150000,
+          priceTransport: 50000
+        },
+
+        // Toast State
+        toast: {
+          show: false,
+          message: ''
+        },
+
+        // Sample Visit Data
+        visits: [
+          {
+            id: 1,
+            name: "Bpk. Hendra Wijaya",
+            age: 58,
+            gender: "Laki-laki",
+            diagnosis: "Post-Stroke Iskemik",
+            time: "09:00 WIB",
+            address: "Jl. Kebayoran Baru No. 14, Jakarta Selatan",
+            status: "Jadwal",
+            phone: "6281234567890",
+            priceAction: 150000,
+            priceTransport: 50000
+          },
+          {
+            id: 2,
+            name: "Ibu Ratna Sari",
+            age: 45,
+            gender: "Perempuan",
+            diagnosis: "Frozen Shoulder (L)",
+            time: "11:30 WIB",
+            address: "Jl. Wijaya Timur II No. 8, Jakarta Selatan",
+            status: "Belum Lunas",
+            phone: "6281987654321",
+            priceAction: 175000,
+            priceTransport: 50000
+          },
+          {
+            id: 3,
+            name: "Bpk. Bambang Sutrisno",
+            age: 62,
+            gender: "Laki-laki",
+            diagnosis: "Low Back Pain ec HNP",
+            time: "14:00 WIB",
+            address: "Jl. Radio Dalam Raya No. 45, Jakarta Selatan",
+            status: "Selesai",
+            phone: "6281122334455",
+            priceAction: 200000,
+            priceTransport: 50000
+          }
+        ],
+
+        // Patient Directory Sample
+        patientsList: [
+          {
+            id: 101,
+            name: "Bpk. Hendra Wijaya",
+            gender: "Laki-laki",
+            age: 58,
+            baselineDiagnosis: "Post-Stroke Iskemik Hemiparese Dextra",
+            address: "Jl. Kebayoran Baru No. 14, Jakarta Selatan",
+            totalSessions: 8
+          },
+          {
+            id: 102,
+            name: "Ibu Ratna Sari",
+            gender: "Perempuan",
+            age: 45,
+            baselineDiagnosis: "Frozen Shoulder Sinistra Stage II",
+            address: "Jl. Wijaya Timur II No. 8, Jakarta Selatan",
+            totalSessions: 4
+          },
+          {
+            id: 103,
+            name: "Bpk. Bambang Sutrisno",
+            gender: "Laki-laki",
+            age: 62,
+            baselineDiagnosis: "Low Back Pain ec HNP L4-L5",
+            address: "Jl. Radio Dalam Raya No. 45, Jakarta Selatan",
+            totalSessions: 12
+          }
+        ],
+
+        // Quick Chips Template Dictionary
+        quickChips: {
+          S: ['Nyeri berkurang', 'Kaku saat pagi', 'Pusing (-)', 'Sulit berjalan', 'Nyeri skala 4/10'],
+          O: ['TD 120/80 mmHg', 'ROM Bahu 120°', 'Spasme M. Trapezius', 'Tes Lasègue (+)', 'Kekuatan Otot 4/5'],
+          A: ['Post-Stroke H+30', 'Frozen Shoulder Stage II', 'LBP HNP L4-L5 Progress Baik'],
+          P: ['TENS 15 Menit', 'Infrared 15 Menit', 'Passive ROM Exercise', 'Active Resisted Ex', 'Strengthening Quadriceps', 'Peregangan Hamstring']
+        },
+
+        // Sample History Timeline
+        patientHistorySample: [
+          {
+            date: "18 Okt 2026",
+            S: "Nyeri pinggang berkurang saat duduk.",
+            O: "Lasègue test 60 deg, spasme erector spinae berkurang.",
+            A: "LBP HNP L4-L5 mengalami perbaikan fleksibilitas.",
+            P: "Core stability exercise, TENS 15 min, PR: Bridging exercise 3x10 rep."
+          },
+          {
+            date: "15 Okt 2026",
+            S: "Nyeri tajam saat membungkuk skala 6/10.",
+            O: "Spasme lumbal (+), ROM fleksi terbatas.",
+            A: "LBP ec HNP L4-L5 akut.",
+            P: "IR 15 min, Gentle stretching, edukasi postur."
+          }
+        ],
+
+        // INIT
+        initApp() {
+          const now = new Date();
+          const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+          this.currentDateStr = now.toLocaleDateString('id-ID', options);
+          
+          this.$nextTick(() => {
+            lucide.createIcons();
+          });
+        },
+
+        switchTab(tab) {
+          this.activeTab = tab;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        get filteredPatients() {
+          if (!this.searchQuery) return this.patientsList;
+          const q = this.searchQuery.toLowerCase();
+          return this.patientsList.filter(p => 
+            p.name.toLowerCase().includes(q) || p.baselineDiagnosis.toLowerCase().includes(q)
+          );
+        },
+
+        // SOAP Methods
+        openSoapModal(visit) {
+          this.activeVisit = visit;
+          this.invoiceData.priceAction = visit.priceAction || 150000;
+          this.invoiceData.priceTransport = visit.priceTransport || 50000;
+
+          // Pre-fill dummy SOAP if completed
+          if (visit.status === 'Selesai') {
+            this.soapData = {
+              S: "Keluhan nyeri berkurang, terasa lebih enteng.",
+              O: "TD 120/80 mmHg, ROM membaik 15 derajat.",
+              A: "Progresif positif sesuai target.",
+              P: "TENS 15 Menit, latihan penguatan mandiri.",
+              photoAttached: true
+            };
+          } else {
+            this.soapData = { S: '', O: '', A: '', P: '', photoAttached: false };
+          }
+
+          this.isSoapOpen = true;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        closeSoapModal() {
+          this.isSoapOpen = false;
+        },
+
+        appendChip(section, text) {
+          if (this.soapData[section]) {
+            this.soapData[section] += ', ' + text;
+          } else {
+            this.soapData[section] = text;
+          }
+          this.showToast('Template ditambahkan');
+        },
+
+        simulatePhotoUpload() {
+          this.soapData.photoAttached = true;
+          this.showToast('Foto dokumentasi berhasil diambil');
+        },
+
+        submitSoapToInvoice() {
+          this.isSoapOpen = false;
+          this.isInvoiceOpen = true;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        // Invoice Calculations
+        get totalInvoiceCalculated() {
+          return (Number(this.invoiceData.priceAction) || 0) + (Number(this.invoiceData.priceTransport) || 0);
+        },
+
+        formatRupiah(amount) {
+          return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
+        },
+
+        generateWaTextPreview() {
+          const name = this.activeVisit ? this.activeVisit.name : 'Pasien';
+          const total = this.formatRupiah(this.totalInvoiceCalculated);
+          const date = this.currentDateStr;
+          
+          return `*BUKTI PEMBAYARAN FISIOTERAPI HOMECARE*\n` +
+                 `----------------------------------------\n` +
+                 `Tanggal: ${date}\n` +
+                 `Pasien: ${name}\n\n` +
+                 `Rincian Tagihan:\n` +
+                 `- Tindakan Fisioterapi: ${this.formatRupiah(this.invoiceData.priceAction)}\n` +
+                 `- Biaya Visit / Transport: ${this.formatRupiah(this.invoiceData.priceTransport)}\n` +
+                 `*TOTAL: ${total}*\n\n` +
+                 `Status: *LUNAS*\n\n` +
+                 `Terima kasih. Semoga lekas sembuh!\n` +
+                 `_Ftr. Sarah Amalia, S.Ft_`;
+        },
+
+        completeAndSendInvoice(newStatus) {
+          if (this.activeVisit) {
+            this.activeVisit.status = newStatus;
+          }
+          this.isInvoiceOpen = false;
+          
+          // Open WhatsApp link simulation
+          const phone = this.activeVisit ? this.activeVisit.phone : '';
+          const text = encodeURIComponent(this.generateWaTextPreview());
+          window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+
+          this.showToast('Sesi selesai & Invoice terkirim!');
+        },
+
+        // Patient Details History
+        openPatientDetail(patient) {
+          this.selectedPatient = patient;
+          this.isPatientDetailOpen = true;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        getInitials(name) {
+          return name.split(' ').map(n => n[0]).join('').substring(0, 2);
+        },
+
+        // Toast Helper
+        showToast(msg) {
+          this.toast.message = msg;
+          this.toast.show = true;
+          setTimeout(() => {
+            this.toast.show = false;
+          }, 2500);
+        }
+      }
+    }
+  </script>
+</body>
+</html>

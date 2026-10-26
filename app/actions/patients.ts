@@ -1,0 +1,136 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { initialPatients, sampleHistoryMap } from "@/lib/mock-data";
+import { Patient } from "@/lib/types";
+
+let localPatients: Patient[] = [...initialPatients];
+
+export async function getPatients(searchQuery: string = ""): Promise<Patient[]> {
+  try {
+    const supabase = createServerSupabaseClient();
+    let query = supabase.from("patients").select("*").order("name", { ascending: true });
+
+    if (searchQuery.trim()) {
+      query = query.or(`name.ilike.%${searchQuery}%,initial_diagnosis.ilike.%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) {
+      if (!searchQuery.trim()) return localPatients;
+      const q = searchQuery.toLowerCase();
+      return localPatients.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.initial_diagnosis.toLowerCase().includes(q) ||
+          p.address.toLowerCase().includes(q)
+      );
+    }
+    return data;
+  } catch (err) {
+    if (!searchQuery.trim()) return localPatients;
+    const q = searchQuery.toLowerCase();
+    return localPatients.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.initial_diagnosis.toLowerCase().includes(q)
+    );
+  }
+}
+
+export async function getPatientById(patientId: string): Promise<Patient | null> {
+  try {
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("patients")
+      .select("*")
+      .eq("id", patientId)
+      .single();
+
+    if (error || !data) {
+      return localPatients.find((p) => p.id === patientId) || null;
+    }
+    return data;
+  } catch {
+    return localPatients.find((p) => p.id === patientId) || null;
+  }
+}
+
+export async function getPatientHistory(patientId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("sessions")
+      .select("*")
+      .eq("patient_id", patientId)
+      .order("scheduled_date", { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return sampleHistoryMap[patientId] || [
+        {
+          date: "18 Okt 2026",
+          S: "Nyeri pinggang berkurang saat duduk santai.",
+          O: "Lasègue test 60 deg, spasme erector spinae berkurang signifikan.",
+          A: "Perbaikan mobilitas dan fleksibilitas fungsional.",
+          P: "Core stability exercise, TENS 15 min, PR: Bridging 3x10 rep.",
+        },
+      ];
+    }
+
+    return data.map((s) => ({
+      date: new Date(s.scheduled_date).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+      S: s.subjective || "Tidak ada catatan keluhan.",
+      O: s.objective || "Pemeriksaan fisik dalam batas normal.",
+      A: s.assessment || "Kondisi stabil.",
+      P: s.plan || "Terapi modalitas & latihan mandiri.",
+    }));
+  } catch {
+    return sampleHistoryMap[patientId] || [];
+  }
+}
+
+export async function createPatient(patientData: {
+  name: string;
+  phone: string;
+  address: string;
+  gender: "Laki-laki" | "Perempuan";
+  age: number;
+  initial_diagnosis: string;
+}) {
+  const newPatient: Patient = {
+    id: `p-${Date.now()}`,
+    name: patientData.name,
+    phone: patientData.phone,
+    address: patientData.address,
+    gender: patientData.gender,
+    age: patientData.age,
+    initial_diagnosis: patientData.initial_diagnosis,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    const supabase = createServerSupabaseClient();
+    const { error } = await supabase.from("patients").insert({
+      id: newPatient.id,
+      name: newPatient.name,
+      phone: newPatient.phone,
+      address: newPatient.address,
+      initial_diagnosis: newPatient.initial_diagnosis,
+    });
+
+    if (error) {
+      console.warn("Supabase insert error, saving locally:", error.message);
+    }
+  } catch (err) {
+    console.warn("Using fallback local patient insertion");
+  }
+
+  localPatients = [newPatient, ...localPatients];
+  revalidatePath("/patients");
+  return { success: true, patient: newPatient };
+}
