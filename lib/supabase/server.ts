@@ -5,7 +5,7 @@ let lastErrorTimestamp = 0;
 const COOLDOWN_PERIOD_MS = 5 * 1000; // 5 seconds cooldown if offline
 
 export function isSupabaseReachable(): boolean {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   if (!url || url.includes("dummy-project") || url.includes("xxxxxx")) {
     return false;
   }
@@ -26,8 +26,14 @@ export function resetSupabaseError() {
 
 export function createServerSupabaseClient() {
   const cookieStore = cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key";
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    "https://dummy-project.supabase.co";
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    "dummy-anon-key";
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
