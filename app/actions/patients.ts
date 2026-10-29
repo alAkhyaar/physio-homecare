@@ -26,19 +26,22 @@ export async function getPatients(searchQuery: string = ""): Promise<Patient[]> 
       }
 
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        resetSupabaseError();
-        return data as Patient[];
-      }
+
       if (error) {
         console.warn("Supabase getPatients error:", error.message);
+        recordSupabaseError();
+      } else {
+        // data could be [] (empty table) — that's still valid, return it
+        resetSupabaseError();
+        return (data as Patient[]) ?? [];
       }
     } catch (err) {
       console.warn("Supabase getPatients catch:", err);
+      recordSupabaseError();
     }
   }
 
-  // Fallback to localPatients if Supabase is offline or empty
+  // Fallback to in-memory data only when Supabase is truly unreachable
   if (!searchQuery.trim()) return localPatients;
   const q = searchQuery.toLowerCase();
   return localPatients.filter(
@@ -59,12 +62,14 @@ export async function getPatientById(patientId: string): Promise<Patient | null>
         .eq("id", patientId)
         .single();
 
-      if (!error && data) {
+      if (error) {
+        console.warn("Supabase getPatientById error:", error.message);
+      } else if (data) {
         resetSupabaseError();
         return data as Patient;
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn("Supabase getPatientById catch:", err);
     }
   }
 
@@ -81,9 +86,11 @@ export async function getPatientHistory(patientId: string) {
         .eq("patient_id", patientId)
         .order("scheduled_date", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (error) {
+        console.warn("Supabase getPatientHistory error:", error.message);
+      } else {
         resetSupabaseError();
-        return data.map((s) => ({
+        return (data ?? []).map((s) => ({
           date: new Date(s.scheduled_date).toLocaleDateString("id-ID", {
             day: "numeric",
             month: "short",
@@ -95,8 +102,8 @@ export async function getPatientHistory(patientId: string) {
           P: s.plan || "Terapi modalitas & latihan mandiri.",
         }));
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn("Supabase getPatientHistory catch:", err);
     }
   }
 
@@ -119,6 +126,36 @@ export async function createPatient(patientData: {
   age: number;
   initial_diagnosis: string;
 }) {
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      const { data, error } = await supabase
+        .from("patients")
+        .insert({
+          name: patientData.name,
+          phone: patientData.phone,
+          address: patientData.address,
+          gender: patientData.gender,
+          age: patientData.age,
+          initial_diagnosis: patientData.initial_diagnosis,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Supabase insert patient error:", error.message, error.details, error.hint);
+        // Fall through to in-memory fallback
+      } else {
+        resetSupabaseError();
+        revalidatePath("/patients");
+        return { success: true, patient: data as Patient };
+      }
+    } catch (err) {
+      console.error("Supabase insert patient exception:", err);
+    }
+  }
+
+  // Fallback: save in-memory only (offline mode)
   const newPatient: Patient = {
     id: `p-${Date.now()}`,
     name: patientData.name,
@@ -129,39 +166,7 @@ export async function createPatient(patientData: {
     initial_diagnosis: patientData.initial_diagnosis,
     created_at: new Date().toISOString(),
   };
-
-  if (isSupabaseReachable()) {
-    try {
-      const supabase = createServerSupabaseClient();
-      const { data, error } = await supabase
-        .from("patients")
-        .insert({
-          id: newPatient.id,
-          name: newPatient.name,
-          phone: newPatient.phone,
-          address: newPatient.address,
-          gender: newPatient.gender,
-          age: newPatient.age,
-          initial_diagnosis: newPatient.initial_diagnosis,
-          created_at: newPatient.created_at,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Supabase insert patient error:", error.message);
-      } else {
-        resetSupabaseError();
-        if (data) {
-          newPatient.id = data.id;
-        }
-      }
-    } catch (err) {
-      console.error("Supabase insert patient exception:", err);
-    }
-  }
-
   localPatients = [newPatient, ...localPatients];
   revalidatePath("/patients");
-  return { success: true, patient: newPatient };
+  return { success: true, patient: newPatient, offline: true };
 }
