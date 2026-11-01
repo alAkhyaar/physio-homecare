@@ -33,7 +33,7 @@ export default function ProfilePage() {
         </div>
 
         <h3 className="font-bold text-slate-900 text-base leading-tight">
-          Ftr. Sarah Amalia, S.Ft
+          Ftr. Amirah Zahidah
         </h3>
         <p className="text-xs text-slate-500 font-medium mt-1">
           STR: 19882023091122 (Aktif s/d 2029)
