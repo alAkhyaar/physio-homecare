@@ -170,3 +170,69 @@ export async function createPatient(patientData: {
   revalidatePath("/patients");
   return { success: true, patient: newPatient, offline: true };
 }
+
+export async function updatePatient(
+  patientId: string,
+  patientData: {
+    name: string;
+    phone: string;
+    address: string;
+    gender: "Laki-laki" | "Perempuan";
+    age: number;
+    initial_diagnosis: string;
+    date_of_birth?: string;
+  }
+) {
+  if (isSupabaseReachable()) {
+    try {
+      const supabase = createServerSupabaseClient();
+      const { data, error } = await supabase
+        .from("patients")
+        .update({
+          name: patientData.name,
+          phone: patientData.phone,
+          address: patientData.address,
+          gender: patientData.gender,
+          age: patientData.age,
+          initial_diagnosis: patientData.initial_diagnosis,
+          date_of_birth: patientData.date_of_birth,
+        })
+        .eq("id", patientId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Supabase update patient error:", error.message, error.details);
+      } else {
+        resetSupabaseError();
+        revalidatePath("/patients");
+        revalidatePath("/");
+        return { success: true, patient: data as Patient };
+      }
+    } catch (err) {
+      console.error("Supabase update patient exception:", err);
+    }
+  }
+
+  // Fallback in-memory
+  let updatedPatient: Patient | null = null;
+  localPatients = localPatients.map((p) => {
+    if (p.id === patientId) {
+      updatedPatient = {
+        ...p,
+        ...patientData,
+      };
+      return updatedPatient;
+    }
+    return p;
+  });
+
+  revalidatePath("/patients");
+  revalidatePath("/");
+  return {
+    success: true,
+    patient: updatedPatient || ({ id: patientId, ...patientData } as Patient),
+    offline: true,
+  };
+}
+

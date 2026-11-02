@@ -188,6 +188,13 @@ export function PatientDirectoryClient({
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         patient={selectedPatient}
+        onPatientUpdated={(updated) => {
+          setPatients((prev) =>
+            prev.map((p) => (p.id === updated.id ? updated : p))
+          );
+          setSelectedPatient(updated);
+          router.refresh();
+        }}
       />
 
       {/* Add Patient Sheet */}
