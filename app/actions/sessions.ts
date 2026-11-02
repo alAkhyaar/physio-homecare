@@ -48,6 +48,41 @@ export async function getSessionsForToday(): Promise<Session[]> {
   }
 }
 
+export async function getAllSessions(): Promise<Session[]> {
+  if (!isSupabaseReachable()) {
+    return localSessions;
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("sessions")
+      .select(`
+        *,
+        patient:patients(*)
+      `)
+      .order("scheduled_date", { ascending: false });
+
+    if (error) {
+      recordSupabaseError();
+      return localSessions;
+    }
+
+    if (!data || data.length === 0) {
+      return localSessions;
+    }
+
+    resetSupabaseError();
+    return data.map((item) => ({
+      ...item,
+      patient: item.patient,
+    }));
+  } catch (err) {
+    recordSupabaseError();
+    return localSessions;
+  }
+}
+
 export async function updateSessionSoap(
   sessionId: string,
   soapData: {

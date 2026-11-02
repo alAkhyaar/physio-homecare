@@ -19,7 +19,7 @@ export default function EditProfilePage() {
   const router = useRouter();
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
-    name: "Sarah Amalia",
+    name: "Amirah Zahidah",
     title: "S.Ft",
     phone: "081234567890",
     address: "Jl. Kenanga No. 12, Bandung",

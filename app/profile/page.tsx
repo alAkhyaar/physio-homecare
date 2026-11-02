@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import {
   User,
   Sliders,
@@ -70,29 +71,38 @@ export default function ProfilePage() {
 
       {/* Menu Options */}
       <Card className="divide-y divide-slate-100 shadow-xs border-slate-200 overflow-hidden text-xs font-semibold text-slate-700">
-        <div className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition">
+        <Link
+          href="/profile/edit"
+          className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition block"
+        >
           <div className="flex items-center gap-3">
             <User className="w-4 h-4 text-slate-400" />
             <span>Edit Data Diri & STR</span>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
-        </div>
+        </Link>
 
-        <div className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition">
+        <Link
+          href="/profile/soap-templates"
+          className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition block"
+        >
           <div className="flex items-center gap-3">
             <Sliders className="w-4 h-4 text-slate-400" />
             <span>Atur Template Teks SOAP (Chips)</span>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
-        </div>
+        </Link>
 
-        <div className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition">
+        <Link
+          href="/profile/rekap"
+          className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition block"
+        >
           <div className="flex items-center gap-3">
             <FileSpreadsheet className="w-4 h-4 text-slate-400" />
             <span>Rekap Pendapatan & Export Invoice</span>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
-        </div>
+        </Link>
 
         <div className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition">
           <div className="flex items-center gap-3">
